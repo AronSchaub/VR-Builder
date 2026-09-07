@@ -1,9 +1,12 @@
+// Copyright (c) 2026 Aron Schaub
+// SPDX-License-Identifier: Apache-2.0
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using UnityEngine;
 using VRBuilder.Core.IO;
+using VRBuilder.Core.ProcessRunning;
 using VRBuilder.Core.Runtime.Registry;
 using VRBuilder.Core.Serialization;
 using VRBuilder.Core.Utils;
@@ -11,18 +14,80 @@ using VRBuilder.Core.Utils.Logging;
 
 namespace VRBuilder.Core.Configuration
 {
+    /// <summary>
+    /// Default runtime service to get and load processes over the <see cref="RuntimeHandler"/> to the scene.
+    /// </summary>
     public class RuntimeService : IRuntimeService
     {
+        private Action<string?> selectedProcessChanged;
+
         private IRuntimeServiceConfiguration configuration;
-        private IRuntimeConfigurator? configurator;
+        private IRuntimeHandler? runtimeHandler;
+        private IConfigurableProcessHandler? processHandler;
         private string selectedProcessStreamingAssetsPath;
 
-        public string SelectedProcess
+        public event Action<string?> SelectedProcessChanged
         {
-            get => configurator.RuntimeConfiguration.SelectedProcess;
-            set => configurator.RuntimeConfiguration.SelectedProcess = value;
+            add => selectedProcessChanged += value;
+            remove => selectedProcessChanged -= value;
         }
 
+        /// <inheritdoc />
+        public ILifeCycleLoggingConfiguration LifeCycleLogging => LifeCycleLoggingConfig.Instance;
+
+        /// <inheritdoc />
+        public IRuntimeHandler Handler
+        {
+            get => runtimeHandler;
+            set
+            {
+                string previousSelection = SelectedProcess;
+
+                if (runtimeHandler is RuntimeHandler previousConfigurator)
+                {
+                    previousConfigurator.SelectedProcessChanged -= OnSelectedProcessChanged;
+                }
+
+                runtimeHandler = value;
+
+                if (runtimeHandler is RuntimeHandler currentConfigurator)
+                {
+                    currentConfigurator.SelectedProcessChanged += OnSelectedProcessChanged;
+                }
+
+                string currentSelection = runtimeHandler?.RuntimeConfiguration?.SelectedProcess ?? string.Empty;
+                if (string.Equals(previousSelection, currentSelection, StringComparison.Ordinal) == false)
+                {
+                    selectedProcessChanged?.Invoke(currentSelection);
+                }
+            }
+        }
+
+        /// <inheritdoc />
+        public string SelectedProcess
+        {
+            get => runtimeHandler?.SelectedProcess;
+            set
+            {
+                if (runtimeHandler == null || (runtimeHandler.SelectedProcess ?? string.Empty) == (value ?? string.Empty))
+                {
+                    ForwardingLogger.LogError("The process handler is null or selected process is null or empty.");
+					return;
+                }
+
+				runtimeHandler.SelectedProcess = value;
+                selectedProcessChanged?.Invoke(value);
+            }
+        }
+
+        /// <inheritdoc />
+        public IConfigurableProcessHandler ProcessHandler
+        {
+            get => processHandler;
+            set => processHandler = value;
+        }
+
+        /// <inheritdoc />
         public string SelectedProcessStreamingAssetsPath
         {
             get => configuration.SelectedProcessStreamingAssetsPath;
@@ -32,39 +97,33 @@ namespace VRBuilder.Core.Configuration
         /// <inheritdoc />
         public IProcessSerializer Serializer { get; set; } = new NewtonsoftJsonProcessSerializerV4();
 
-        public Action<string?> selectedProcessChanged;
-
-        public event Action<string?> SelectedProcessChanged
-        {
-            add => selectedProcessChanged += value;
-            remove => selectedProcessChanged -= value;
-        }
-
-        /// <summary>
-        /// Name of the manifest file that could be used to save process asset information.
-        /// </summary>
+        /// <inheritdoc />
         public string ManifestFileName
         {
-            get => configurator.RuntimeConfiguration.ManifestFileName;
-            set => configurator.RuntimeConfiguration.ManifestFileName = value;
+            get => runtimeHandler?.RuntimeConfiguration?.ManifestFileName ?? "ProcessManifest";
+            set
+            {
+                if (runtimeHandler != null)
+                {
+                    runtimeHandler.RuntimeConfiguration.ManifestFileName = value;
+                }
+            }
         }
 
-        public IRuntimeConfigurator Configurator { get; set; }
-        public ILifeCycleLoggingConfiguration LifeCycleLogging => LifeCycleLoggingConfig.Instance;
-
-        private static string GetProcessNameFromPath(string path)
+        /// <inheritdoc />
+        public void SetConfiguration(IRuntimeServiceConfiguration configuration)
         {
-            int slashIndex = path.LastIndexOf('/');
-            string fileName = path.Substring(slashIndex + 1);
-            int pointIndex = fileName.LastIndexOf('.');
-            fileName = fileName.Substring(0, pointIndex);
-
-            return fileName;
+            this.configuration = configuration;
         }
 
-
-        public async Task<IProcess> LoadProcess(string path)
+        /// <inheritdoc />
+        public async Task<IProcess> LoadProcess(string path = "")
         {
+            if(string.IsNullOrEmpty(path))
+            {
+                path = SelectedProcess;
+            }
+
             try
             {
                 if (string.IsNullOrEmpty(path))
@@ -72,7 +131,7 @@ namespace VRBuilder.Core.Configuration
                     throw new ArgumentException("Given path is null or empty!");
                 }
 
-                int index = path.LastIndexOf("/");
+                int index = path.LastIndexOf("/", StringComparison.Ordinal);
                 string processFolder = path.Substring(0, index);
                 string processName = GetProcessNameFromPath(path);
                 string manifestPath = $"{processFolder}/{ManifestFileName}.{Serializer.FileFormat}";
@@ -95,6 +154,38 @@ namespace VRBuilder.Core.Configuration
             return null;
         }
 
+        /// <inheritdoc />
+        public void LoadProcess(IProcess process)
+        {
+            ProcessHandler.Initialize(process);
+        }
+
+        /// <inheritdoc />
+        public void StartProcess()
+        {
+            ProcessHandler.StartProcess();
+        }
+
+        private void OnDisable()
+        {
+            ProcessHandler.StopProcess();
+        }
+
+        private void OnSelectedProcessChanged(string selectedProcess)
+        {
+            selectedProcessChanged?.Invoke(selectedProcess);
+        }
+
+        private static string GetProcessNameFromPath(string path)
+        {
+            int slashIndex = path.LastIndexOf('/');
+            string fileName = path.Substring(slashIndex + 1);
+            int pointIndex = fileName.LastIndexOf('.');
+            fileName = fileName.Substring(0, pointIndex);
+
+            return fileName;
+        }
+
         private async Task<List<byte[]>> GetAdditionalProcessData(string processFolder, IProcessAssetManifest manifest)
         {
             List<byte[]> additionalData = new List<byte[]>();
@@ -113,11 +204,6 @@ namespace VRBuilder.Core.Configuration
             }
 
             return additionalData;
-        }
-
-        public void SetConfiguration(IRuntimeServiceConfiguration configuration)
-        {
-            this.configuration = configuration;
         }
     }
 }

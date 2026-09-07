@@ -6,7 +6,6 @@ using Source.Core.Runtime.Localization;
 using VRBuilder.Core.Localization;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
-using VRBuilder.Core.Localization;
 using VRBuilder.Core.Runtime.Registry;
 using VRBuilder.Core.Settings;
 
@@ -15,10 +14,10 @@ namespace VRBuilder.Core.Configuration
     /// <summary>
     /// Language settings for VR Builder.
     /// </summary>
-    public class LanguageSettings : SettingsObject<LanguageSettings>, ILanguageConfiguration
+    public class LanguageServiceSettings : SettingsObject<LanguageServiceSettings>, ILanguageConfiguration
     {
         /// <summary>
-        /// Language which should be used if no localization settings are present.
+        /// Language that should be used if no localization settings are present.
         /// </summary>
         public string ApplicationLanguage = "En";
 

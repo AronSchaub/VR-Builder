@@ -6,35 +6,33 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using UnityEngine;
 using VRBuilder.Core.Exceptions;
-using VRBuilder.Core.Runtime.Registry;
 
 namespace VRBuilder.Core.Configuration.Modes
 {
     /// <summary>
-    /// Simple mode handler .
+    /// Simple mode handler for managing current mode and mode changing.
     /// </summary>
-    public sealed class BaseModeHandler : MonoBehaviour, IModeHandler
+    public sealed class BaseModeHandler : IModeHandler
     {
         /// <inheritdoc />
         public event EventHandler<ModeChangedEventArgs> ModeChanged;
 
         /// <inheritdoc />
-        public int CurrentModeIndex { get; private set; }
+        public int CurrentModeIndex { get; private set; } = 0;
 
         /// <inheritdoc />
-        public IModeService CurrentModeService
+        public IMode CurrentMode
         {
             get => AvailableModes[CurrentModeIndex];
         }
 
         /// <inheritdoc />
-        public ReadOnlyCollection<IModeService> AvailableModes { get; }
+        public ReadOnlyCollection<IMode> AvailableModes { private set; get; }
 
-        public BaseModeHandler(List<IModeService> modes, int defaultMode = 0)
+        public BaseModeHandler(List<IMode> modes = null, int defaultMode = 0)
         {
-            AvailableModes = new ReadOnlyCollection<IModeService>(new List<IModeService> { ServiceRegistry.Get<IModeService>().ActiveOrDefaultMode });
+            AvailableModes = new ReadOnlyCollection<IMode>(modes ?? new List<IMode> { new Mode("Default", new WhitelistTypeRule<IOptional>()) });
             CurrentModeIndex = defaultMode;
         }
 
@@ -54,23 +52,27 @@ namespace VRBuilder.Core.Configuration.Modes
 
             CurrentModeIndex = index;
 
-            if (ModeChanged != null)
-            {
-                ModeChanged(this, new ModeChangedEventArgs(CurrentModeService));
-            }
+            ModeChanged?.Invoke(this, new ModeChangedEventArgs(CurrentMode));
         }
 
         /// <inheritdoc />
-        public void SetMode(IModeService modeService)
+        public void SetMode(IMode mode)
         {
-            if (AvailableModes.Contains(modeService))
+            if (AvailableModes.Contains(mode))
             {
-                SetMode(AvailableModes.IndexOf(modeService));
+                SetMode(AvailableModes.IndexOf(mode));
             }
             else
             {
                 throw new MissingModeException("Given mode is not part of the available modes!");
             }
+        }
+
+        /// <inheritdoc />
+        public void SetModes(List<IMode> modes, int index)
+        {
+            AvailableModes = modes.AsReadOnly();
+            SetMode(index);
         }
     }
 }

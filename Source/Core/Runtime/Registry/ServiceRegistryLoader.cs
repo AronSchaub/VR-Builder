@@ -2,14 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using Source.Core.Runtime.Configuration;
 using Source.Core.Runtime.Configuration;
 using Source.Core.Runtime.Localization;
 using Source.TextToSpeech;
-using UnityEditor;
 using UnityEngine;
 using VRBuilder.Core.Configuration;
 using VRBuilder.Core.Configuration.Modes;
@@ -17,15 +12,12 @@ using VRBuilder.Core.Input;
 using VRBuilder.Core.IO;
 using VRBuilder.Core.Localization;
 using VRBuilder.Core.ProcessRunning;
-using VRBuilder.Core.Registry;
 using VRBuilder.Core.RestrictiveEnvironment;
 using VRBuilder.Core.SceneObjects;
 using VRBuilder.Core.Settings;
 using VRBuilder.Core.StepLocking;
 using VRBuilder.Core.TextToSpeech;
 using VRBuilder.Core.User;
-using VRBuilder.Unity.ProcessRunning;
-using ModeService = VRBuilder.Core.Configuration.Modes.ModeService;
 
 namespace VRBuilder.Core.Runtime.Registry
 {
@@ -35,53 +27,50 @@ namespace VRBuilder.Core.Runtime.Registry
         [Header("Services")]
         [SerializeField]
         [ServiceImplementation(typeof(IProcessRunner))]
-        public string ProcessRunner = typeof(DefaultProcessRunner).FullName;
+        public string ProcessRunner = typeof(DefaultProcessRunner).AssemblyQualifiedName;
 
         [SerializeField]
         [ServiceImplementation(typeof(ILanguageService))]
-        public string LanguageService = typeof(LanguageService).FullName;
+        public string LanguageService = typeof(LanguageService).AssemblyQualifiedName;
 
         [SerializeField]
         [ServiceImplementation(typeof(IStepLockService))]
-        public string StepLockService = typeof(DefaultStepLockHandling).FullName;
+        public string StepLockService = typeof(DefaultStepLockHandling).AssemblyQualifiedName;
 
         [SerializeField]
         [ServiceImplementation(typeof(ISceneObjectRegistry))]
-        public string SceneObjectRegistry = typeof(SceneObjectRegistry).FullName;
+        public string SceneObjectRegistry = typeof(SceneObjectRegistry).AssemblyQualifiedName;
 
         [SerializeField]
         [ServiceImplementation(typeof(IUserService))]
-        public string UserService = typeof(UserService).FullName;
+        public string UserService = typeof(UserService).AssemblyQualifiedName;
 
         [SerializeField]
         [ServiceImplementation(typeof(IModeService))]
-        public string ModeService = typeof(ModeService).FullName;
+        public string ModeService = typeof(ModeService).AssemblyQualifiedName;
 
         [SerializeField]
         [ServiceImplementation(typeof(IInputController))]
-        public string InputService = typeof(DefaultInputController).FullName;
+        public string InputService = typeof(DefaultInputController).AssemblyQualifiedName;
 
         [SerializeField]
         [ServiceImplementation(typeof(IPlatformFileSystem))]
-        public string FileManager = typeof(FileManager).FullName;
+        public string FileManager = typeof(FileManager).AssemblyQualifiedName;
 
         [SerializeField]
         [ServiceImplementation(typeof(ITextToSpeechService))]
-        public string TextToSpeechService = typeof(TextToSpeechService).FullName;
+        public string TextToSpeechService = typeof(TextToSpeechService).AssemblyQualifiedName;
 
         [SerializeField]
         [ServiceImplementation(typeof(IRuntimeService))]
-        public string RuntimeService = typeof(RuntimeService).FullName;
+        public string RuntimeService = typeof(RuntimeService).AssemblyQualifiedName;
 
         [Header("Configurations")]
         [SerializeField]
         public ProcessRunnerSettings ProcessRunnerConfiguration;
 
         [SerializeField]
-        public LanguageSettings LanguageConfiguration;
-
-        [SerializeField]
-        public ModeSettings ModeConfiguration;
+        public LanguageServiceSettings languageServiceConfiguration;
 
         [SerializeField]
         public StepLockSettings StepLockConfiguration;
@@ -90,26 +79,21 @@ namespace VRBuilder.Core.Runtime.Registry
         public SceneObjectRegistrySettings SceneObjectRegistryConfiguration;
 
         [SerializeField]
+        public ModeServiceSettings ModeServiceConfiguration;
+
+        [SerializeField]
         public UserSettings UserConfiguration;
 
         [SerializeField]
         public InputSettings InputConfiguration;
 
         [SerializeField]
-        public TextToSpeechProviderSettings TextToSpeechConfiguration;
+        public TextToSpeechServiceSettings TextToSpeechConfiguration;
 
         [SerializeField]
         public RuntimeServiceConfiguration RuntimeServiceConfiguration;
 
         private static bool initialized;
-
-#if UNITY_EDITOR
-        [InitializeOnLoadMethod]
-        private static void OnEditorLoad()
-        {
-            Instance.Register();
-        }
-#endif
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void OnRuntimeLoad()
@@ -117,7 +101,7 @@ namespace VRBuilder.Core.Runtime.Registry
             Instance.Register();
         }
 
-        private void Register()
+        public void Register()
         {
             if (initialized) return;
 
@@ -127,9 +111,11 @@ namespace VRBuilder.Core.Runtime.Registry
 
             ServiceRegistry.Register<ILanguageService, ILanguageConfiguration>(
                 CreateService<ILanguageService>(LanguageService),
-                LanguageConfiguration ?? LanguageSettings.Instance);
+                languageServiceConfiguration ?? LanguageServiceSettings.Instance);
 
-            ServiceRegistry.Register<IModeService>(CreateService<IModeService>(ModeService));
+            ServiceRegistry.Register<IModeService, IModeServiceConfiguration>(
+                CreateService<IModeService>(ModeService),
+                ModeServiceConfiguration ?? ModeServiceSettings.Instance);
 
             ServiceRegistry.Register<IStepLockService, IStepLockConfiguration>(
                 CreateService<IStepLockService>(StepLockService),
@@ -147,11 +133,11 @@ namespace VRBuilder.Core.Runtime.Registry
                 CreateService<IInputController>(InputService),
                 InputConfiguration ?? InputSettings.Instance);
 
-            ServiceRegistry.Register<IPlatformFileSystem>(CreateService<IPlatformFileSystem>(FileManager));
+            ServiceRegistry.Register(CreateService<IPlatformFileSystem>(FileManager));
 
             ServiceRegistry.Register<ITextToSpeechService, ITextToSpeechConfiguration>(
                 CreateService<ITextToSpeechService>(TextToSpeechService),
-                TextToSpeechConfiguration ?? TextToSpeechProviderSettings.Instance);
+                TextToSpeechConfiguration ?? TextToSpeechServiceSettings.Instance);
 
             ServiceRegistry.Register<IRuntimeService, IRuntimeServiceConfiguration>(
                 CreateService<IRuntimeService>(RuntimeService),

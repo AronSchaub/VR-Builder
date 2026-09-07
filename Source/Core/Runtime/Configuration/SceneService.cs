@@ -2,12 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using VRBuilder.Core.Registry;
 
 namespace VRBuilder.Core.Configuration
 {
     /// <summary>
-    /// Handles configuration specific to this scene.
+    /// Handles configuration specific to this scene and process. Process based access to the scene, e.g. <see cref="defaultConfettiPrefab"/>.
     /// </summary>
     public class SceneService : MonoBehaviour, ISceneService
     {
@@ -62,10 +61,6 @@ namespace VRBuilder.Core.Configuration
         }
 
         public void SetConfiguration(ISceneConfiguration configuration)
-        {
-        }
-
-        public void Initialize()
         {
         }
     }
